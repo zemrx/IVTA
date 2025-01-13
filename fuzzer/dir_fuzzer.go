@@ -10,7 +10,8 @@ import (
 	"sync/atomic"
 )
 
-func FuzzDirectories(targetURL string, wordlistFile string, concurrency int, totalWords int64) []string {
+func FuzzDirectories(targetURL string, wordlistFile string, concurrency int) []string {
+	totalWords := CountLines(wordlistFile)
 	file, err := os.Open(wordlistFile)
 	if err != nil {
 		log.Fatalf("Failed to open wordlist file: %v", err)

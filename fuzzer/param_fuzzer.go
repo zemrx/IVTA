@@ -11,7 +11,29 @@ import (
 	"sync/atomic"
 )
 
-func FuzzParameters(targetURL string, wordlistFile string, concurrency int, totalWords int64, customSymbol string) []string {
+// CountLines counts the number of lines in a file.
+func CountLines(filename string) int64 {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatalf("Failed to open wordlist file: %v", err)
+	}
+	defer file.Close()
+
+	var lineCount int64
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lineCount++
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("Error reading wordlist file: %v", err)
+	}
+
+	return lineCount
+}
+
+func FuzzParameters(targetURL string, wordlistFile string, concurrency int, customSymbol string) []string {
+	totalWords := CountLines(wordlistFile)
 	file, err := os.Open(wordlistFile)
 	if err != nil {
 		log.Fatalf("Failed to open wordlist file: %v", err)
@@ -55,7 +77,7 @@ func FuzzParameters(targetURL string, wordlistFile string, concurrency int, tota
 			}
 
 			atomic.AddInt64(&wordCounter, 1)
-			fmt.Printf("\rProgress: %d/%d words processed", atomic.LoadInt64(&wordCounter), totalWords) // Update progress in the same line
+			fmt.Printf("\rProgress: %d/%d words processed", atomic.LoadInt64(&wordCounter), totalWords)
 		}(fullURL, param)
 	}
 

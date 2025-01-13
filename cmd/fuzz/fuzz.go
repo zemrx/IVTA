@@ -18,10 +18,14 @@ func Execute() {
 
 	fmt.Println("Target URL:", cfg.TargetURL)
 
-	validPaths := fuzzer.FuzzDirectories(cfg.TargetURL, cfg.DirWordlistFile, cfg.Concurrency, 0)
+	validPaths := fuzzer.FuzzDirectories(cfg.TargetURL, cfg.DirWordlistFile, cfg.Concurrency)
 	fmt.Printf("Found %d valid paths.\n", len(validPaths))
 
-	validParams := fuzzer.FuzzParameters(cfg.TargetURL, cfg.ParamWordlistFile, cfg.Concurrency, 0, cfg.CustomSymbol)
+	var validParams []string
+	for _, path := range validPaths {
+		params := fuzzer.FuzzParameters(path, cfg.ParamWordlistFile, cfg.Concurrency, cfg.CustomSymbol)
+		validParams = append(validParams, params...)
+	}
 	fmt.Printf("Found %d valid parameters.\n", len(validParams))
 
 	config.SaveResults(cfg.OutputFile, nil, nil, nil, validPaths, validParams)

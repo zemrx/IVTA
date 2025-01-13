@@ -27,21 +27,58 @@ func Execute() {
 	} else {
 		fmt.Printf("Parsed %d URLs from sitemap.\n", len(sitemapURLs))
 	}
-	htmlLinks := crawler.RunCrawler(cfg.TargetURL, cfg.MaxDepth, cfg.Concurrency)
+
+	var allLinks []string
+	var validPaths []string
+	var validParams []string
+
+	hybridDepth := cfg.MaxDepth
+
+	fmt.Println("Starting initial crawling...")
+	htmlLinks := crawler.RunCrawler(cfg.TargetURL, hybridDepth, cfg.Concurrency)
 	fmt.Printf("Crawled %d links using HTML parsing.\n", len(htmlLinks))
 
 	jsLinks := crawler.RunCrawlerWithJS(cfg.TargetURL)
 	fmt.Printf("Crawled %d links using JavaScript rendering.\n", len(jsLinks))
 
-	crawler.SubmitForms(cfg.TargetURL)
+	allLinks = append(allLinks, htmlLinks...)
+	allLinks = append(allLinks, jsLinks...)
 
-	validPaths := fuzzer.FuzzDirectories(cfg.TargetURL, cfg.DirWordlistFile, cfg.Concurrency, 0)
+	fmt.Println("Starting fuzzing on discovered links...")
+	for _, link := range allLinks {
+		paths := fuzzer.FuzzDirectories(link, cfg.DirWordlistFile, cfg.Concurrency)
+		validPaths = append(validPaths, paths...)
+	}
 	fmt.Printf("Found %d valid paths.\n", len(validPaths))
 
-	validParams := fuzzer.FuzzParameters(cfg.TargetURL, cfg.ParamWordlistFile, cfg.Concurrency, 0, cfg.CustomSymbol)
+	for depth := 1; depth <= hybridDepth; depth++ {
+		fmt.Printf("Starting hybrid crawling and fuzzing at depth %d...\n", depth)
+
+		var newLinks []string
+		for _, path := range validPaths {
+			links := crawler.RunCrawler(path, 1, cfg.Concurrency)
+			newLinks = append(newLinks, links...)
+		}
+		fmt.Printf("Crawled %d new links at depth %d.\n", len(newLinks), depth)
+
+		var newValidPaths []string
+		for _, link := range newLinks {
+			paths := fuzzer.FuzzDirectories(link, cfg.DirWordlistFile, cfg.Concurrency)
+			newValidPaths = append(newValidPaths, paths...)
+		}
+		fmt.Printf("Found %d new valid paths at depth %d.\n", len(newValidPaths), depth)
+
+		validPaths = append(validPaths, newValidPaths...)
+	}
+
+	fmt.Println("Starting parameter fuzzing...")
+	for _, path := range validPaths {
+		params := fuzzer.FuzzParameters(path, cfg.ParamWordlistFile, cfg.Concurrency, cfg.CustomSymbol)
+		validParams = append(validParams, params...)
+	}
 	fmt.Printf("Found %d valid parameters.\n", len(validParams))
 
-	config.SaveResults(cfg.OutputFile, sitemapURLs, htmlLinks, jsLinks, validPaths, validParams)
+	config.SaveResults(cfg.OutputFile, sitemapURLs, allLinks, jsLinks, validPaths, validParams)
 	fmt.Println("Results saved to", cfg.OutputFile)
 }
 

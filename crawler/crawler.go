@@ -1,7 +1,6 @@
 package crawler
 
 import (
-	"log"
 	"net/url"
 	"sync"
 
@@ -33,8 +32,6 @@ func RunCrawler(targetURL string, depth int, concurrency int) []string {
 		if !visited[link] {
 			visited[link] = true
 			discoveredLinks = append(discoveredLinks, link)
-
-			log.Printf("Depth: %d, Visiting: %s\n", e.Request.Depth, link)
 		}
 		mutex.Unlock()
 
@@ -42,14 +39,12 @@ func RunCrawler(targetURL string, depth int, concurrency int) []string {
 	})
 
 	c.OnError(func(r *colly.Response, err error) {
-		log.Printf("Error visiting %s: %v\n", r.Request.URL, err)
-	})
 
-	log.Printf("Starting crawl at depth 0: %s\n", targetURL)
+	})
 
 	err := c.Visit(targetURL)
 	if err != nil {
-		log.Fatalf("Failed to start crawling: %v", err)
+
 	}
 
 	c.Wait()
@@ -60,7 +55,7 @@ func RunCrawler(targetURL string, depth int, concurrency int) []string {
 func extractDomain(rawURL string) string {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		log.Fatalf("Failed to parse URL: %v", err)
+
 	}
 	return parsedURL.Hostname()
 }
