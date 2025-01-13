@@ -1,6 +1,8 @@
 
+---
 
 # IVTA
+
 A powerful and modular web crawling and fuzzing tool written in Go. This tool is designed for security testing, reconnaissance, and discovering hidden parameters, directories, and vulnerabilities in web applications.
 
 ---
@@ -22,8 +24,7 @@ A powerful and modular web crawling and fuzzing tool written in Go. This tool is
   - Combines crawling and fuzzing into a single workflow.
 
 - **Output**:
-  - Save results to JSON or CSV files for further analysis.
-  - Verbose mode for detailed debugging.
+  - Save results to JSON.
 
 ---
 
@@ -35,18 +36,19 @@ A powerful and modular web crawling and fuzzing tool written in Go. This tool is
 2. **Clone the Repository**:
    ```bash
    git clone https://github.com/zemrx/IVTA
-   cd go-crawler
+   cd IVTA
    ```
 
 3. **Install Dependencies**:
    ```bash
    go get github.com/chromedp/chromedp
    go get github.com/PuerkitoBio/goquery
+   go get github.com/gocolly/colly/v2
    ```
 
 4. **Build the Tool**:
    ```bash
-   go build -o IVTA
+   go build -o ivta
    ```
 
 ---
@@ -65,17 +67,17 @@ The tool supports the following subcommands:
 
 1. **Crawl a Website**:
    ```bash
-   ./IVTA crawl -u https://example.com -d 2 -c 5 -v -o crawl_results.json
+   ./ivta crawl -u https://example.com -d 2 -c 5 -v -o crawl_results.json
    ```
 
 2. **Fuzz for Directories and Parameters**:
    ```bash
-   ./IVTA fuzz -u https://example.com -w wordlist.txt -p param_wordlist.txt -c 5 -v -o fuzz_results.json -s "custom_value"
+   ./ivta fuzz -u https://example.com -w wordlist.txt -p param_wordlist.txt -c 5 -v -o fuzz_results.json -s "custom_value"
    ```
 
 3. **Run Hybrid Crawling and Fuzzing**:
    ```bash
-   ./IVTA hybrid -u https://example.com -w wordlist.txt -p param_wordlist.txt -d 2 -c 5 -v -o hybrid_results.json -s "custom_value"
+   ./ivta hybrid -u https://example.com -w wordlist.txt -p param_wordlist.txt -d 2 -c 5 -v -o hybrid_results.json -s "custom_value"
    ```
 
 ### Options
@@ -88,7 +90,6 @@ The tool supports the following subcommands:
 - **`-v`**: Enable verbose mode.
 - **`-o`**: Path to the output file (default: `results.json`).
 - **`-s`**: Custom symbol to test for reflection (default: `test`).
-- **`-r`**: Path to the resume file (JSON format).
 - **`-h`**: Display help message.
 
 ---
@@ -100,17 +101,13 @@ The tool uses wordlists for directory and parameter fuzzing. You can use your ow
 - [SecLists](https://github.com/danielmiessler/SecLists)
 - [FuzzDB](https://github.com/fuzzdb-project/fuzzdb)
 
+Place your wordlists in the `wordlists/` directory or specify the path using the `-w` and `-p` options.
 
 ---
 
-## Contributing
+## Configuration
 
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch for your feature or bugfix.
-3. Commit your changes and push to the branch.
-4. Submit a pull request.
+The tool supports configuration via command-line arguments. For advanced configurations, you can modify the source code or use environment variables.
 
 ---
 
@@ -118,9 +115,10 @@ Contributions are welcome! Please follow these steps:
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-
 ---
 
 ## Contact
 
 For questions or feedback, please open an issue or contact [zemrx0@gmail.com](mailto:zemrx0@gmail.com).
+
+---

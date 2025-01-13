@@ -17,11 +17,23 @@ func main() {
 
 	switch os.Args[1] {
 	case "crawl":
-		crawl.Execute()
+		if len(os.Args) > 2 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			crawl.Help()
+		} else {
+			crawl.Execute()
+		}
 	case "fuzz":
-		fuzz.Execute()
+		if len(os.Args) > 2 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			fuzz.Help()
+		} else {
+			fuzz.Execute()
+		}
 	case "hybrid":
-		hybrid.Execute()
+		if len(os.Args) > 2 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			hybrid.Help()
+		} else {
+			hybrid.Execute()
+		}
 	case "-h", "--help":
 		printHelp()
 	default:
@@ -32,7 +44,7 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Println("Usage: IVTA <command> [options]")
+	fmt.Println("Usage: .\\ivta.exe <command> [options]")
 	fmt.Println("Commands:")
 	fmt.Println("  crawl    Run the crawler")
 	fmt.Println("  fuzz     Run the fuzzer")
