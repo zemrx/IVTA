@@ -38,8 +38,8 @@ func Execute() {
 	htmlLinks := crawler.RunCrawler(cfg.TargetURL, hybridDepth, cfg.Concurrency)
 	fmt.Printf("Crawled %d links using HTML parsing.\n", len(htmlLinks))
 
-	results := crawler.RunCrawlerWithJS(cfg.TargetURL)
-	jsLinks := results["links"]
+	jsLinks := crawler.RunCrawlerWithJS(cfg.TargetURL, hybridDepth, cfg.Concurrency)
+	fmt.Printf("Crawled %d links using JavaScript rendering.\n", len(jsLinks))
 
 	allLinks = append(allLinks, htmlLinks...)
 	allLinks = append(allLinks, jsLinks...)
