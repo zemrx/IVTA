@@ -35,7 +35,7 @@ A powerful and modular web crawling and fuzzing tool written in Go. This tool is
 2. **Clone the Repository**:
    ```bash
    git clone https://github.com/zemrx/IVTA
-   cd go-crawler
+   cd IVTA
    ```
 
 3. **Install Dependencies**:
