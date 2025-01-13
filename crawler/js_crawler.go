@@ -21,10 +21,8 @@ func RunCrawlerWithJS(targetURL string) map[string][]string {
 		dynamicContent []string
 	)
 
-	// Initialize metadata to avoid nil map
 	metadata = make(map[string]string)
 
-	// Run the browser tasks
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(targetURL),
 		chromedp.WaitReady("body"),
@@ -69,7 +67,6 @@ func RunCrawlerWithJS(targetURL string) map[string][]string {
 	)
 	if err != nil {
 		log.Printf("Failed to run browser: %v", err)
-		// Return an empty result instead of failing
 		return map[string][]string{
 			"links":          []string{},
 			"textContent":    []string{},
@@ -79,7 +76,6 @@ func RunCrawlerWithJS(targetURL string) map[string][]string {
 		}
 	}
 
-	// Resolve relative URLs
 	for i, link := range links {
 		if strings.HasPrefix(link, "/") || strings.HasPrefix(link, "./") || strings.HasPrefix(link, "../") {
 			resolvedURL, err := resolveURL(targetURL, link)
@@ -91,16 +87,13 @@ func RunCrawlerWithJS(targetURL string) map[string][]string {
 		}
 	}
 
-	// Remove duplicates
 	links = removeDuplicates(links)
 	textContent = removeDuplicates(textContent)
 	imageSources = removeDuplicates(imageSources)
 	dynamicContent = removeDuplicates(dynamicContent)
 
-	// Convert metadata map to slice
 	metadataSlice := mapToSlice(metadata)
 
-	// Return the result
 	result := map[string][]string{
 		"links":          links,
 		"textContent":    textContent,
