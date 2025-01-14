@@ -9,15 +9,17 @@ import (
 )
 
 type CrawlConfig struct {
-	TargetURL   string
-	MaxDepth    int
-	Concurrency int
-	Verbose     bool
-	OutputFile  string
+	TargetURL      string
+	TargetListFile string
+	MaxDepth       int
+	Concurrency    int
+	Verbose        bool
+	OutputFile     string
 }
 
 type FuzzConfig struct {
 	TargetURL         string
+	TargetListFile    string
 	DirWordlistFile   string
 	ParamWordlistFile string
 	Concurrency       int
@@ -28,6 +30,7 @@ type FuzzConfig struct {
 
 type HybridConfig struct {
 	TargetURL         string
+	TargetListFile    string
 	DirWordlistFile   string
 	ParamWordlistFile string
 	MaxDepth          int
@@ -42,7 +45,8 @@ func LoadCrawlConfig() CrawlConfig {
 
 	crawlFlagSet := flag.NewFlagSet("crawl", flag.ExitOnError)
 
-	crawlFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for crawling (required)")
+	crawlFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for crawling (required if -tl is not used)")
+	crawlFlagSet.StringVar(&cfg.TargetListFile, "tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
 	crawlFlagSet.IntVar(&cfg.MaxDepth, "d", 2, "Maximum depth for recursive discovery")
 	crawlFlagSet.IntVar(&cfg.Concurrency, "c", 5, "Number of concurrent requests")
 	crawlFlagSet.BoolVar(&cfg.Verbose, "v", false, "Enable verbose mode")
@@ -52,7 +56,13 @@ func LoadCrawlConfig() CrawlConfig {
 		log.Fatal("Failed to parse flags:", err)
 	}
 
-	validateURL(cfg.TargetURL)
+	if cfg.TargetURL == "" && cfg.TargetListFile == "" {
+		log.Fatal("Please provide a target URL using the -u flag or a target list file using the -tl flag")
+	}
+
+	if cfg.TargetURL != "" {
+		validateURL(cfg.TargetURL)
+	}
 
 	return cfg
 }
@@ -62,7 +72,8 @@ func LoadFuzzConfig() FuzzConfig {
 
 	fuzzFlagSet := flag.NewFlagSet("fuzz", flag.ExitOnError)
 
-	fuzzFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for fuzzing (required)")
+	fuzzFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for fuzzing (required if -tl is not used)")
+	fuzzFlagSet.StringVar(&cfg.TargetListFile, "tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
 	fuzzFlagSet.StringVar(&cfg.DirWordlistFile, "w", "wordlist.txt", "Path to the directory wordlist file")
 	fuzzFlagSet.StringVar(&cfg.ParamWordlistFile, "p", "param_wordlist.txt", "Path to the parameter wordlist file")
 	fuzzFlagSet.IntVar(&cfg.Concurrency, "c", 5, "Number of concurrent requests")
@@ -74,7 +85,13 @@ func LoadFuzzConfig() FuzzConfig {
 		log.Fatal("Failed to parse flags:", err)
 	}
 
-	validateURL(cfg.TargetURL)
+	if cfg.TargetURL == "" && cfg.TargetListFile == "" {
+		log.Fatal("Please provide a target URL using the -u flag or a target list file using the -tl flag")
+	}
+
+	if cfg.TargetURL != "" {
+		validateURL(cfg.TargetURL)
+	}
 
 	return cfg
 }
@@ -84,7 +101,8 @@ func LoadHybridConfig() HybridConfig {
 
 	hybridFlagSet := flag.NewFlagSet("hybrid", flag.ExitOnError)
 
-	hybridFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for hybrid discovery (required)")
+	hybridFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for hybrid discovery (required if -tl is not used)")
+	hybridFlagSet.StringVar(&cfg.TargetListFile, "tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
 	hybridFlagSet.StringVar(&cfg.DirWordlistFile, "w", "wordlist.txt", "Path to the directory wordlist file")
 	hybridFlagSet.StringVar(&cfg.ParamWordlistFile, "p", "param_wordlist.txt", "Path to the parameter wordlist file")
 	hybridFlagSet.IntVar(&cfg.MaxDepth, "d", 2, "Maximum depth for recursive discovery")
@@ -97,20 +115,22 @@ func LoadHybridConfig() HybridConfig {
 		log.Fatal("Failed to parse flags:", err)
 	}
 
-	validateURL(cfg.TargetURL)
+	if cfg.TargetURL == "" && cfg.TargetListFile == "" {
+		log.Fatal("Please provide a target URL using the -u flag or a target list file using the -tl flag")
+	}
+
+	if cfg.TargetURL != "" {
+		validateURL(cfg.TargetURL)
+	}
 
 	return cfg
 }
 
 func validateURL(url string) {
-	if url == "" {
-		log.Fatal("Please provide a target URL using the -u flag")
-	}
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		log.Fatal("Error: The URL must start with http:// or https://")
 	}
 }
-
 func SaveResults(outputFile string, sitemapURLs []string, htmlLinks []string, jsLinks []string, validPaths []string, validParams []string) {
 	var allLinks []string
 	allLinks = append(allLinks, htmlLinks...)

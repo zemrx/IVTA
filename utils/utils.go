@@ -25,3 +25,26 @@ func CountLines(filename string) int64 {
 
 	return lineCount
 }
+
+func ReadTargetList(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var targets []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		target := scanner.Text()
+		if target != "" {
+			targets = append(targets, target)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return targets, nil
+}
