@@ -1,6 +1,4 @@
 
----
-
 # IVTA
 
 A powerful and modular web crawling and fuzzing tool written in Go. This tool is designed for security testing, reconnaissance, and discovering hidden parameters, directories, and vulnerabilities in web applications.
@@ -22,6 +20,9 @@ A powerful and modular web crawling and fuzzing tool written in Go. This tool is
 
 - **Hybrid Mode**:
   - Combines crawling and fuzzing into a single workflow.
+
+- **Target List Support**:
+  - Process multiple target URLs from a file using the `-tl` flag.
 
 - **Output**:
   - Save results to JSON.
@@ -70,19 +71,35 @@ The tool supports the following subcommands:
    ./ivta crawl -u https://example.com -d 2 -c 5 -v -o crawl_results.json
    ```
 
-2. **Fuzz for Directories and Parameters**:
+2. **Crawl Multiple Websites from a Target List**:
+   ```bash
+   ./ivta crawl -tl targets.txt -d 2 -c 5 -v -o crawl_results.json
+   ```
+
+3. **Fuzz for Directories and Parameters**:
    ```bash
    ./ivta fuzz -u https://example.com -w wordlist.txt -p param_wordlist.txt -c 5 -v -o fuzz_results.json -s "custom_value"
    ```
 
-3. **Run Hybrid Crawling and Fuzzing**:
+4. **Fuzz Multiple Websites from a Target List**:
+   ```bash
+   ./ivta fuzz -tl targets.txt -w wordlist.txt -p param_wordlist.txt -c 5 -v -o fuzz_results.json -s "custom_value"
+   ```
+
+5. **Run Hybrid Crawling and Fuzzing**:
    ```bash
    ./ivta hybrid -u https://example.com -w wordlist.txt -p param_wordlist.txt -d 2 -c 5 -v -o hybrid_results.json -s "custom_value"
    ```
 
+6. **Run Hybrid Mode on Multiple Websites from a Target List**:
+   ```bash
+   ./ivta hybrid -tl targets.txt -w wordlist.txt -p param_wordlist.txt -d 2 -c 5 -v -o hybrid_results.json -s "custom_value"
+   ```
+
 ### Options
 
-- **`-u`**: Target URL (required).
+- **`-u`**: Target URL (required if `-tl` is not used).
+- **`-tl`**: Path to a file containing a list of target URLs (required if `-u` is not used).
 - **`-w`**: Path to the directory wordlist file (default: `wordlist.txt`).
 - **`-p`**: Path to the parameter wordlist file (default: `param_wordlist.txt`).
 - **`-d`**: Maximum depth for recursive discovery (default: `2`).
