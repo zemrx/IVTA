@@ -1,6 +1,7 @@
 package crawl
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -11,12 +12,37 @@ import (
 )
 
 func Execute() {
-	if len(os.Args) < 3 {
+	targetURLFlag := flag.String("u", "", "Target URL to crawl (required if -tl is not used)")
+	targetListFlag := flag.String("tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
+	maxDepthFlag := flag.Int("d", 2, "Maximum depth for recursive discovery (default: 2)")
+	concurrencyFlag := flag.Int("c", 5, "Number of concurrent requests (default: 5)")
+	verboseFlag := flag.Bool("v", false, "Enable verbose mode")
+	outputFileFlag := flag.String("o", "crawl_results.json", "Path to the output file (default: crawl_results.json)")
+	helpFlag := flag.Bool("h", false, "Display help message")
+	flag.Parse()
+
+	if *helpFlag {
+		Help()
+		os.Exit(0)
+	}
+
+	if *targetURLFlag == "" && *targetListFlag == "" {
+		fmt.Println("Error: You must provide either a target URL (-u) or a target list file (-tl).")
 		Help()
 		os.Exit(1)
 	}
 
 	cfg := config.LoadCrawlConfig()
+	if *targetURLFlag != "" {
+		cfg.TargetURL = *targetURLFlag
+	}
+	if *targetListFlag != "" {
+		cfg.TargetListFile = *targetListFlag
+	}
+	cfg.MaxDepth = *maxDepthFlag
+	cfg.Concurrency = *concurrencyFlag
+	cfg.OutputFile = *outputFileFlag
+	cfg.Verbose = *verboseFlag
 
 	var targets []string
 	if cfg.TargetListFile != "" {
@@ -35,7 +61,7 @@ func Execute() {
 
 		sitemapURL := target + "/sitemap.xml"
 		sitemapURLs := parser.ParseSitemap(sitemapURL)
-		if sitemapURLs == nil {
+		if sitemapURLs == nil || len(sitemapURLs) == 0 {
 			fmt.Println("No sitemap found or failed to parse sitemap.")
 		} else {
 			fmt.Printf("Parsed %d URLs from sitemap.\n", len(sitemapURLs))
@@ -55,8 +81,10 @@ func Execute() {
 }
 
 func Help() {
-	fmt.Println("Usage: .\\ivta.exe crawl -u <target_url> [options]")
-	fmt.Println("Crawl a website and discover links.")
+	fmt.Println("Usage: ivta crawl -u <target_url> [options]")
+	fmt.Println("       ivta crawl -tl <target_list_file> [options]")
+	fmt.Println()
+	fmt.Println("Crawl a website and discover links, sitemaps, and forms.")
 	fmt.Println("Options:")
 	fmt.Println("  -u       Target URL (required if -tl is not used)")
 	fmt.Println("  -tl      Path to a file containing a list of target URLs (required if -u is not used)")
@@ -64,5 +92,5 @@ func Help() {
 	fmt.Println("  -c       Number of concurrent requests (default: 5)")
 	fmt.Println("  -v       Enable verbose mode")
 	fmt.Println("  -o       Path to the output file (default: crawl_results.json)")
-	fmt.Println("  -h, --help   Display this help message")
+	fmt.Println("  -h       Display this help message")
 }

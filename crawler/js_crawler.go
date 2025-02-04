@@ -2,12 +2,36 @@ package crawler
 
 import (
 	"context"
+	"log"
 	"net/url"
 	"sync"
 	"time"
 
 	"github.com/chromedp/chromedp"
 )
+
+func RunCrawlerWithJS(targetURL string, depth int, concurrency int) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	var (
+		links   = make(chan string, 1000)
+		visited = &sync.Map{}
+		wg      sync.WaitGroup
+	)
+
+	wg.Add(1)
+	go fetchLinks(ctx, targetURL, 0, depth, visited, links, &wg, targetURL)
+
+	wg.Wait()
+	close(links)
+
+	var results []string
+	for link := range links {
+		results = append(results, link)
+	}
+	return results
+}
 
 func fetchLinks(ctx context.Context, currentURL string, currentDepth int, depth int, visited *sync.Map, links chan<- string, wg *sync.WaitGroup, targetURL string) {
 	defer wg.Done()
@@ -23,13 +47,14 @@ func fetchLinks(ctx context.Context, currentURL string, currentDepth int, depth 
 	defer cancelChromedp()
 
 	var fetchedLinks []string
-	_ = chromedp.Run(chromedpCtx,
+	if err := chromedp.Run(chromedpCtx,
 		chromedp.Navigate(currentURL),
 		chromedp.WaitReady("body"),
-		chromedp.Evaluate(`
-            Array.from(document.querySelectorAll('a')).map(a => a.href).filter(href => href !== null && href !== '');
-        `, &fetchedLinks),
-	)
+		chromedp.Evaluate(`Array.from(document.querySelectorAll('a')).map(a => a.href).filter(href => href);`, &fetchedLinks),
+	); err != nil {
+		log.Printf("chromedp error at %s: %v", currentURL, err)
+		return
+	}
 
 	for _, link := range fetchedLinks {
 		resolvedLink, err := resolveURL(currentURL, link)
@@ -48,42 +73,16 @@ func fetchLinks(ctx context.Context, currentURL string, currentDepth int, depth 
 	}
 }
 
-func RunCrawlerWithJS(targetURL string, depth int, concurrency int) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	var (
-		links   = make(chan string, 1000)
-		visited = &sync.Map{}
-		wg      sync.WaitGroup
-		result  []string
-	)
-
-	wg.Add(1)
-	go fetchLinks(ctx, targetURL, 0, depth, visited, links, &wg, targetURL)
-
-	go func() {
-		for link := range links {
-			result = append(result, link)
-		}
-	}()
-
-	wg.Wait()
-	close(links)
-
-	return result
-}
-
 func resolveURL(baseURL, relativeURL string) (string, error) {
 	base, err := url.Parse(baseURL)
 	if err != nil {
 		return "", err
 	}
-	relative, err := url.Parse(relativeURL)
+	rel, err := url.Parse(relativeURL)
 	if err != nil {
 		return "", err
 	}
-	return base.ResolveReference(relative).String(), nil
+	return base.ResolveReference(rel).String(), nil
 }
 
 func isSameDomain(baseURL, targetURL string) bool {

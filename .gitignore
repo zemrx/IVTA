@@ -1,0 +1,5 @@
+# Ignore test files
+*_test.go
+
+# Ignore Makefiles
+Makefile
