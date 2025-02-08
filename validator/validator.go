@@ -16,13 +16,11 @@ import (
 	"time"
 )
 
-// ParamCheck holds a URL and a query parameter to check.
 type ParamCheck struct {
 	URL   string
 	Param string
 }
 
-// httpClient is configured with a custom transport and timeout settings.
 var httpClient = &http.Client{
 	Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -35,7 +33,6 @@ var httpClient = &http.Client{
 }
 
 func main() {
-	// Prevent following redirects.
 	httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
@@ -43,15 +40,10 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	initialChecks := make(chan ParamCheck, 40)
 
-	// Set up the pipeline:
-	// 1. Identify reflected parameters.
-	// 2. Verify that appending a fixed string is reflected.
-	// 3. Test for various special characters.
 	reflectedChecks := makePool(initialChecks, processReflectedParams)
 	appendedChecks := makePool(reflectedChecks, processAppendedCheck)
 	done := makePool(appendedChecks, processCharInjection)
 
-	// Read URLs (one per line) from standard input.
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line != "" {
@@ -63,14 +55,10 @@ func main() {
 	}
 	close(initialChecks)
 
-	// Drain the final stage to ensure all processing is complete.
 	for range done {
-		// Final stage prints its output.
 	}
 }
 
-// processReflectedParams checks which query parameters in a URL are reflected in its HTML response.
-// Each reflected parameter is passed downstream.
 func processReflectedParams(pc ParamCheck, out chan<- ParamCheck) {
 	params, err := checkReflected(pc.URL)
 	if err != nil {
@@ -78,7 +66,6 @@ func processReflectedParams(pc ParamCheck, out chan<- ParamCheck) {
 		return
 	}
 	if len(params) == 0 {
-		// No parameters were reflected.
 		return
 	}
 	for _, p := range params {
@@ -86,8 +73,6 @@ func processReflectedParams(pc ParamCheck, out chan<- ParamCheck) {
 	}
 }
 
-// processAppendedCheck appends a fixed test suffix to a parameter and checks for reflection.
-// Only parameters that reflect the test string are passed downstream.
 func processAppendedCheck(pc ParamCheck, out chan<- ParamCheck) {
 	const testSuffix = "iy3j4h234hjb23234"
 	reflected, err := checkAppend(pc.URL, pc.Param, testSuffix)
@@ -100,8 +85,6 @@ func processAppendedCheck(pc ParamCheck, out chan<- ParamCheck) {
 	}
 }
 
-// processCharInjection tests whether appending a string that wraps special characters is reflected.
-// If any special character is unfiltered, the URL, parameter, and list of problematic characters are printed.
 func processCharInjection(pc ParamCheck, out chan<- ParamCheck) {
 	result := []string{pc.URL, pc.Param}
 	specialChars := []string{`"`, `'`, "<", ">", "$", "|", "(", ")", "`", ":", ";", "{", "}"}
@@ -119,13 +102,9 @@ func processCharInjection(pc ParamCheck, out chan<- ParamCheck) {
 	if len(result) > 2 {
 		fmt.Printf("URL: %s  Param: %s  Unfiltered: %v\n", result[0], result[1], result[2:])
 	}
-	// Final stage; nothing to pass on.
 }
 
-// checkReflected sends an HTTP GET request to the target URL and checks if any query parameter values
-// appear in the HTML response. It returns a slice of parameter names whose values are reflected.
 func checkReflected(targetURL string) ([]string, error) {
-	// Create a request with a timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -141,7 +120,6 @@ func checkReflected(targetURL string) ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Only process non-redirect HTML responses.
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		return nil, nil
 	}
@@ -171,8 +149,6 @@ func checkReflected(targetURL string) ([]string, error) {
 	return reflectedParams, nil
 }
 
-// checkAppend appends a suffix to a query parameter value and checks if the modified parameter is reflected
-// in the response. It returns true if the parameter value is found in the response.
 func checkAppend(targetURL, param, suffix string) (bool, error) {
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil {
