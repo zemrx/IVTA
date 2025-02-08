@@ -1,137 +1,224 @@
 package validator
 
 import (
+	"bufio"
+	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
-var DefaultSymbols = []string{
-	"!",
-	"\"",
-	"#",
-	"$",
-	"%",
-	"&",
-	"'",
-	"(",
-	")",
-	"*",
-	"+",
-	",",
-	"-",
-	".",
-	"/",
-	":",
-	";",
-	"<",
-	"=",
-	">",
-	"?",
-	"@",
-	"[",
-	"\\",
-	"]",
-	"^",
-	"_",
-	"`",
-	"{",
-	"|",
-	"}",
-	"~",
+// ParamCheck holds a URL and a query parameter to check.
+type ParamCheck struct {
+	URL   string
+	Param string
 }
 
-func ValidateParameter(targetURL, param, marker, method string, headers, data map[string]string) (bool, string, error) {
-	baselineData := cloneMap(data)
-	baselineData[param] = "baseline"
-
-	baselineResp, err := makeRequest(targetURL, method, headers, baselineData)
-	if err != nil {
-		return false, "", fmt.Errorf("baseline request failed: %w", err)
-	}
-	baselineBody, err := io.ReadAll(baselineResp.Body)
-	baselineResp.Body.Close()
-	if err != nil {
-		return false, "", fmt.Errorf("reading baseline response failed: %w", err)
-	}
-	baselineStr := string(baselineBody)
-
-	markerData := cloneMap(data)
-	markerData[param] = marker
-
-	markerResp, err := makeRequest(targetURL, method, headers, markerData)
-	if err != nil {
-		return false, "", fmt.Errorf("marker request failed: %w", err)
-	}
-	markerBody, err := io.ReadAll(markerResp.Body)
-	markerResp.Body.Close()
-	if err != nil {
-		return false, "", fmt.Errorf("reading marker response failed: %w", err)
-	}
-	markerStr := string(markerBody)
-
-	if strings.Contains(markerStr, marker) && !strings.Contains(baselineStr, marker) {
-		return true, fmt.Sprintf("Parameter '%s' is unsanitized; marker '%s' was reflected.", param, marker), nil
-	}
-	return false, fmt.Sprintf("Parameter '%s' appears sanitized with marker '%s'.", param, marker), nil
+// httpClient is configured with a custom transport and timeout settings.
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 1 * time.Second,
+		}).DialContext,
+	},
+	Timeout: 30 * time.Second,
 }
 
-func CheckReflectedSymbols(targetURL, param string, symbols []string, method string, headers, data map[string]string) ([]string, error) {
-	var reflected []string
-	for _, sym := range symbols {
-		unsanitized, _, err := ValidateParameter(targetURL, param, sym, method, headers, data)
+func main() {
+	// Prevent following redirects.
+	httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	scanner := bufio.NewScanner(os.Stdin)
+	initialChecks := make(chan ParamCheck, 40)
+
+	// Set up the pipeline:
+	// 1. Identify reflected parameters.
+	// 2. Verify that appending a fixed string is reflected.
+	// 3. Test for various special characters.
+	reflectedChecks := makePool(initialChecks, processReflectedParams)
+	appendedChecks := makePool(reflectedChecks, processAppendedCheck)
+	done := makePool(appendedChecks, processCharInjection)
+
+	// Read URLs (one per line) from standard input.
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			initialChecks <- ParamCheck{URL: line}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading input: %v", err)
+	}
+	close(initialChecks)
+
+	// Drain the final stage to ensure all processing is complete.
+	for range done {
+		// Final stage prints its output.
+	}
+}
+
+// processReflectedParams checks which query parameters in a URL are reflected in its HTML response.
+// Each reflected parameter is passed downstream.
+func processReflectedParams(pc ParamCheck, out chan<- ParamCheck) {
+	params, err := checkReflected(pc.URL)
+	if err != nil {
+		log.Printf("checkReflected error for URL %s: %v", pc.URL, err)
+		return
+	}
+	if len(params) == 0 {
+		// No parameters were reflected.
+		return
+	}
+	for _, p := range params {
+		out <- ParamCheck{URL: pc.URL, Param: p}
+	}
+}
+
+// processAppendedCheck appends a fixed test suffix to a parameter and checks for reflection.
+// Only parameters that reflect the test string are passed downstream.
+func processAppendedCheck(pc ParamCheck, out chan<- ParamCheck) {
+	const testSuffix = "iy3j4h234hjb23234"
+	reflected, err := checkAppend(pc.URL, pc.Param, testSuffix)
+	if err != nil {
+		log.Printf("checkAppend error for URL %s, param %s: %v", pc.URL, pc.Param, err)
+		return
+	}
+	if reflected {
+		out <- pc
+	}
+}
+
+// processCharInjection tests whether appending a string that wraps special characters is reflected.
+// If any special character is unfiltered, the URL, parameter, and list of problematic characters are printed.
+func processCharInjection(pc ParamCheck, out chan<- ParamCheck) {
+	result := []string{pc.URL, pc.Param}
+	specialChars := []string{`"`, `'`, "<", ">", "$", "|", "(", ")", "`", ":", ";", "{", "}"}
+	for _, char := range specialChars {
+		testSuffix := "aprefix" + char + "asuffix"
+		reflected, err := checkAppend(pc.URL, pc.Param, testSuffix)
 		if err != nil {
-			return nil, err
+			log.Printf("checkAppend error for URL %s, param %s with char %s: %v", pc.URL, pc.Param, char, err)
+			continue
 		}
-		if unsanitized {
-			reflected = append(reflected, sym)
+		if reflected {
+			result = append(result, char)
 		}
 	}
-	return reflected, nil
+	if len(result) > 2 {
+		fmt.Printf("URL: %s  Param: %s  Unfiltered: %v\n", result[0], result[1], result[2:])
+	}
+	// Final stage; nothing to pass on.
 }
 
-func makeRequest(targetURL, method string, headers, data map[string]string) (*http.Response, error) {
-	var req *http.Request
-	var err error
+// checkReflected sends an HTTP GET request to the target URL and checks if any query parameter values
+// appear in the HTML response. It returns a slice of parameter names whose values are reflected.
+func checkReflected(targetURL string) ([]string, error) {
+	// Create a request with a timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	method = strings.ToUpper(method)
-	if method == "GET" {
-		req, err = http.NewRequest("GET", targetURL, nil)
-		if err != nil {
-			return nil, err
-		}
-		q := req.URL.Query()
-		for k, v := range data {
-			q.Add(k, v)
-		}
-		req.URL.RawQuery = q.Encode()
-	} else {
-		formData := url.Values{}
-		for k, v := range data {
-			formData.Add(k, v)
-		}
-		req, err = http.NewRequest(method, targetURL, strings.NewReader(formData.Encode()))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
+	if err != nil {
+		return nil, err
 	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.100 Safari/537.36")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
 	}
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+	defer resp.Body.Close()
+
+	// Only process non-redirect HTML responses.
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return nil, nil
 	}
-	return client.Do(req)
+	if ct := resp.Header.Get("Content-Type"); ct != "" && !strings.Contains(ct, "html") {
+		return nil, nil
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	body := string(bodyBytes)
+
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, err
+	}
+	var reflectedParams []string
+	for key, values := range parsedURL.Query() {
+		for _, value := range values {
+			if strings.Contains(body, value) {
+				reflectedParams = append(reflectedParams, key)
+				break
+			}
+		}
+	}
+	return reflectedParams, nil
 }
 
-func cloneMap(original map[string]string) map[string]string {
-	newMap := make(map[string]string)
-	for k, v := range original {
-		newMap[k] = v
+// checkAppend appends a suffix to a query parameter value and checks if the modified parameter is reflected
+// in the response. It returns true if the parameter value is found in the response.
+func checkAppend(targetURL, param, suffix string) (bool, error) {
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return false, err
 	}
-	return newMap
+	queryValues := parsedURL.Query()
+	originalValue := queryValues.Get(param)
+	queryValues.Set(param, originalValue+suffix)
+	parsedURL.RawQuery = queryValues.Encode()
+
+	reflectedParams, err := checkReflected(parsedURL.String())
+	if err != nil {
+		return false, err
+	}
+	for _, p := range reflectedParams {
+		if p == param {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+type workerFunc func(ParamCheck, chan<- ParamCheck)
+
+func makePool(input <-chan ParamCheck, fn workerFunc) <-chan ParamCheck {
+	var wg sync.WaitGroup
+	output := make(chan ParamCheck)
+	workerCount := 40
+
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range input {
+				fn(item, output)
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(output)
+	}()
+	return output
+}
+
+func IdentifyReflectedParams(targetURL string) ([]string, error) {
+	return checkReflected(targetURL)
 }

@@ -57,6 +57,14 @@ type MinerConfig struct {
 	InjectValue    string
 }
 
+type ValidatorConfig struct {
+	TargetURL      string
+	TargetListFile string
+	Concurrency    int
+	Verbose        bool
+	OutputFile     string
+}
+
 func LoadCrawlConfig() CrawlConfig {
 	cfg := CrawlConfig{}
 
@@ -190,28 +198,50 @@ func LoadMinerConfig() MinerConfig {
 
 	return cfg
 }
+
+func LoadValidatorConfig() ValidatorConfig {
+	cfg := ValidatorConfig{}
+
+	validatorFlagSet := flag.NewFlagSet("validator", flag.ExitOnError)
+
+	validatorFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for validation (required if -tl is not used)")
+	validatorFlagSet.StringVar(&cfg.TargetListFile, "tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
+	validatorFlagSet.IntVar(&cfg.Concurrency, "c", 40, "Number of concurrent requests")
+	validatorFlagSet.BoolVar(&cfg.Verbose, "v", false, "Enable verbose mode")
+	validatorFlagSet.StringVar(&cfg.OutputFile, "o", "validator_results.json", "Path to the output file (JSON format)")
+
+	if err := validatorFlagSet.Parse(os.Args[2:]); err != nil {
+		log.Fatal("Failed to parse flags:", err)
+	}
+
+	if cfg.TargetURL == "" && cfg.TargetListFile == "" {
+		log.Fatal("Please provide a target URL using the -u flag or a target list file using the -tl flag")
+	}
+
+	if cfg.TargetURL != "" {
+		validateURL(cfg.TargetURL)
+	}
+
+	return cfg
+}
 func validateURL(url string) {
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		log.Fatal("Error: The URL must start with http:// or https://")
 	}
 }
 func SaveResults(outputFile string, sitemapURLs []string, htmlLinks []string, jsLinks []string, validPaths []string, validParams []string) {
-	var allLinks []string
-	allLinks = append(allLinks, htmlLinks...)
-	allLinks = append(allLinks, jsLinks...)
-	uniqueLinks := make(map[string]bool)
-	for _, link := range allLinks {
-		uniqueLinks[link] = true
-	}
-
-	var result []string
-	for link := range uniqueLinks {
-		result = append(result, link)
-	}
 	results := struct {
-		Links []string `json:"links"`
+		SitemapURLs []string `json:"sitemap_urls"`
+		HTMLLinks   []string `json:"html_links"`
+		JSLinks     []string `json:"js_links"`
+		ValidPaths  []string `json:"valid_paths"`
+		ValidParams []string `json:"valid_params"`
 	}{
-		Links: result,
+		SitemapURLs: sitemapURLs,
+		HTMLLinks:   removeDuplicates(htmlLinks),
+		JSLinks:     removeDuplicates(jsLinks),
+		ValidPaths:  removeDuplicates(validPaths),
+		ValidParams: removeDuplicates(validParams),
 	}
 
 	file, err := os.Create(outputFile)
@@ -222,8 +252,20 @@ func SaveResults(outputFile string, sitemapURLs []string, htmlLinks []string, js
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	err = encoder.Encode(results)
-	if err != nil {
+	if err := encoder.Encode(results); err != nil {
 		log.Fatalf("Failed to encode results to JSON: %v", err)
 	}
+}
+
+// removeDuplicates removes duplicate strings from a slice.
+func removeDuplicates(input []string) []string {
+	unique := make(map[string]bool)
+	var result []string
+	for _, item := range input {
+		if !unique[item] {
+			unique[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
 }

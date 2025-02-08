@@ -129,8 +129,6 @@ func Execute() {
 			Data:    data,
 		}
 
-		// Run parameter fuzzing. (The miner.BruteForce function uses an injection value hardcoded as "test-value".
-		// You could adjust miner code to use cfg.CustomSymbol if desired.)
 		validParams, err := miner.BruteForce(target, paramWordlist, options, cfg.Concurrency)
 		if err != nil {
 			fmt.Printf("Error during parameter fuzzing: %v\n", err)
@@ -141,14 +139,11 @@ func Execute() {
 			fmt.Println(param)
 		}
 
-		// --- Save Results ---
-		// Save sitemap URLs, all crawled links, JS links, valid directory paths, and valid parameters.
 		config.SaveResults(cfg.OutputFile, sitemapURLs, allLinks, jsLinks, validPaths, validParams)
 		fmt.Println("Results saved to", cfg.OutputFile)
 	}
 }
 
-// Help prints a usage help message.
 func Help() {
 	fmt.Println("Usage: ivta.exe hybrid -u <target_url> [options]")
 	fmt.Println("       ivta.exe hybrid -tl <target_list_file> [options]")

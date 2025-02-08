@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-// ResponseFactors holds differences between two HTTP responses.
 type ResponseFactors struct {
 	SameCode          int
 	SameBody          string
@@ -30,27 +29,23 @@ type ResponseFactors struct {
 	JavaScriptVars    []string
 }
 
-// RequestOptions holds options for making an HTTP request.
 type RequestOptions struct {
 	Method  string
 	Headers map[string]string
 	Data    map[string]string
 }
 
-// Define makes two requests (one baseline, one with an extra parameter/value) and returns the differences.
 func Define(targetURL, param, value string, wordlist []string, options RequestOptions) (ResponseFactors, error) {
 	var factors ResponseFactors
 
-	// First request: baseline
 	startTime := time.Now()
-	resp1, err := makeRequest(targetURL, options)
+	resp1, err := makeMineRequest(targetURL, options)
 	if err != nil {
 		return factors, fmt.Errorf("error making initial request: %w", err)
 	}
 	defer resp1.Body.Close()
 	responseTime1 := time.Since(startTime).Seconds()
 
-	// Second request: with the parameter set
 	modifiedOptions := options
 	if modifiedOptions.Data == nil {
 		modifiedOptions.Data = make(map[string]string)
@@ -58,7 +53,7 @@ func Define(targetURL, param, value string, wordlist []string, options RequestOp
 	modifiedOptions.Data[param] = value
 
 	startTime = time.Now()
-	resp2, err := makeRequest(targetURL, modifiedOptions)
+	resp2, err := makeMineRequest(targetURL, modifiedOptions)
 	if err != nil {
 		return factors, fmt.Errorf("error making second request: %w", err)
 	}
@@ -69,8 +64,7 @@ func Define(targetURL, param, value string, wordlist []string, options RequestOp
 	return factors, nil
 }
 
-// makeRequest creates and executes an HTTP request according to the provided options.
-func makeRequest(targetURL string, options RequestOptions) (*http.Response, error) {
+func makeMineRequest(targetURL string, options RequestOptions) (*http.Response, error) {
 	var req *http.Request
 	var err error
 
@@ -126,7 +120,6 @@ func makeRequest(targetURL string, options RequestOptions) (*http.Response, erro
 
 	client := &http.Client{
 		Timeout: 10 * time.Second,
-		// Do not follow redirects automatically.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -140,18 +133,15 @@ func makeRequest(targetURL string, options RequestOptions) (*http.Response, erro
 	return resp, nil
 }
 
-// compareResponses compares two HTTP responses and returns the differences in a ResponseFactors struct.
 func compareResponses(resp1, resp2 *http.Response, param, value string, wordlist []string, time1, time2 float64) ResponseFactors {
 	factors := ResponseFactors{
 		HeaderChanges: make(map[string]string),
 	}
 
-	// Compare status codes.
 	if resp1.StatusCode == resp2.StatusCode {
 		factors.SameCode = resp1.StatusCode
 	}
 
-	// Compare headers.
 	factors.SameHeaders = make([]string, 0, len(resp1.Header))
 	for key, values1 := range resp1.Header {
 		factors.SameHeaders = append(factors.SameHeaders, key)
@@ -161,11 +151,9 @@ func compareResponses(resp1, resp2 *http.Response, param, value string, wordlist
 		}
 	}
 
-	// Read response bodies.
 	body1, err1 := io.ReadAll(resp1.Body)
 	body2, err2 := io.ReadAll(resp2.Body)
 	if err1 != nil || err2 != nil {
-		// In a production system you might return an error here.
 		return factors
 	}
 
@@ -179,7 +167,6 @@ func compareResponses(resp1, resp2 *http.Response, param, value string, wordlist
 		}
 	}
 
-	// Check for parameter/value missing.
 	if !strings.Contains(string(body2), param) {
 		factors.ParamMissing = wordlist
 	}
@@ -187,7 +174,6 @@ func compareResponses(resp1, resp2 *http.Response, param, value string, wordlist
 		factors.ValueMissing = true
 	}
 
-	// Check redirect.
 	location1 := resp1.Header.Get("Location")
 	location2 := resp2.Header.Get("Location")
 	if location1 != "" && location2 != "" && location1 == location2 {
@@ -201,13 +187,11 @@ func compareResponses(resp1, resp2 *http.Response, param, value string, wordlist
 	return factors
 }
 
-// removeTags removes HTML tags from the input string.
 func removeTags(html string) string {
 	re := regexp.MustCompile(`<.*?>`)
 	return re.ReplaceAllString(html, "")
 }
 
-// extractJavaScriptVariables extracts JavaScript variable names declared via var, let, or const.
 func extractJavaScriptVariables(html string) []string {
 	re := regexp.MustCompile(`\b(var|let|const)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=`)
 	matches := re.FindAllStringSubmatch(html, -1)
@@ -218,7 +202,6 @@ func extractJavaScriptVariables(html string) []string {
 	return variables
 }
 
-// BruteForce concurrently tests parameters from the wordlist and returns those that meet certain criteria.
 func BruteForce(targetURL string, wordlist []string, options RequestOptions, concurrency int) ([]string, error) {
 	var results []string
 	var wg sync.WaitGroup
@@ -234,7 +217,6 @@ func BruteForce(targetURL string, wordlist []string, options RequestOptions, con
 				if err != nil {
 					continue
 				}
-				// The following thresholds are arbitrary and could be made configurable.
 				if factors.ValueMissing || len(factors.ParamMissing) > 0 || factors.ResponseTimeDiff > 1.0 || factors.ContentLengthDiff > 100 {
 					mu.Lock()
 					results = append(results, param)

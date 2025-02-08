@@ -14,27 +14,24 @@ import (
 	"time"
 )
 
-// FuzzResult contains detailed response information for a target URL.
 type FuzzResult struct {
-	URL           string // The target URL that passed filtering.
-	StatusCode    int    // HTTP status code of the response.
-	ContentLength int    // Length of the response body (in bytes).
-	WordCount     int    // Number of words in the response body.
-	LineCount     int    // Number of non-empty lines in the response body.
+	URL           string
+	StatusCode    int
+	ContentLength int
+	WordCount     int
+	LineCount     int
 }
 
-// FuzzOptions holds the blacklist filtering and recursion options for directory fuzzing.
 type FuzzOptions struct {
-	Depth                int      // How deep to recurse into subdirectories.
-	BlacklistStatusCodes []int    // Reject responses with any of these status codes.
-	BlacklistLengths     []int    // Reject responses whose body length exactly equals any of these.
-	BlacklistWordCounts  []int    // Reject responses whose word count exactly equals any of these.
-	BlacklistLineCounts  []int    // Reject responses whose non-empty line count exactly equals any of these.
-	BlacklistSearchWords []string // Reject responses that contain any of these words.
-	BlacklistRegex       []string // Reject responses whose body matches any of these regex patterns.
+	Depth                int
+	BlacklistStatusCodes []int
+	BlacklistLengths     []int
+	BlacklistWordCounts  []int
+	BlacklistLineCounts  []int
+	BlacklistSearchWords []string
+	BlacklistRegex       []string
 }
 
-// readWordlist reads all nonempty lines from the given file.
 func readWordlist(wordlistFile string) ([]string, error) {
 	file, err := os.Open(wordlistFile)
 	if err != nil {
@@ -164,7 +161,6 @@ func passesBlacklistFilters(resp *http.Response, body string, options FuzzOption
 		}
 	}
 
-	// Check blacklisted word count.
 	words := strings.Fields(body)
 	wordCount := len(words)
 	for _, cnt := range options.BlacklistWordCounts {
@@ -173,7 +169,6 @@ func passesBlacklistFilters(resp *http.Response, body string, options FuzzOption
 		}
 	}
 
-	// Check blacklisted non-empty line count.
 	lines := strings.Split(body, "\n")
 	nonEmptyLines := 0
 	for _, line := range lines {
@@ -187,14 +182,12 @@ func passesBlacklistFilters(resp *http.Response, body string, options FuzzOption
 		}
 	}
 
-	// Check blacklisted search words: if any appear in the body, reject.
 	for _, word := range options.BlacklistSearchWords {
 		if strings.Contains(body, word) {
 			return false
 		}
 	}
 
-	// Check blacklisted regex patterns.
 	for _, pattern := range options.BlacklistRegex {
 		re, err := regexp.Compile(pattern)
 		if err == nil && re.MatchString(body) {
