@@ -3,3 +3,8 @@
 
 # Ignore Makefiles
 Makefile
+
+.gitignore
+
+ivta.exe
+raft-small-directories-lowercase.txt

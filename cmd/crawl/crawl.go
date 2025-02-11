@@ -1,7 +1,6 @@
 package crawl
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -12,37 +11,7 @@ import (
 )
 
 func Execute() {
-	targetURLFlag := flag.String("u", "", "Target URL to crawl (required if -tl is not used)")
-	targetListFlag := flag.String("tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
-	maxDepthFlag := flag.Int("d", 2, "Maximum depth for recursive discovery (default: 2)")
-	concurrencyFlag := flag.Int("c", 5, "Number of concurrent requests (default: 5)")
-	verboseFlag := flag.Bool("v", false, "Enable verbose mode")
-	outputFileFlag := flag.String("o", "crawl_results.json", "Path to the output file (default: crawl_results.json)")
-	helpFlag := flag.Bool("h", false, "Display help message")
-	flag.Parse()
-
-	if *helpFlag {
-		Help()
-		os.Exit(0)
-	}
-
-	if *targetURLFlag == "" && *targetListFlag == "" {
-		fmt.Println("Error: You must provide either a target URL (-u) or a target list file (-tl).")
-		Help()
-		os.Exit(1)
-	}
-
 	cfg := config.LoadCrawlConfig()
-	if *targetURLFlag != "" {
-		cfg.TargetURL = *targetURLFlag
-	}
-	if *targetListFlag != "" {
-		cfg.TargetListFile = *targetListFlag
-	}
-	cfg.MaxDepth = *maxDepthFlag
-	cfg.Concurrency = *concurrencyFlag
-	cfg.OutputFile = *outputFileFlag
-	cfg.Verbose = *verboseFlag
 
 	var targets []string
 	if cfg.TargetListFile != "" {

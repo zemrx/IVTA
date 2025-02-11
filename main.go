@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"os"
-
+	mine "ivta/cmd/Param_miner"
 	"ivta/cmd/crawl"
 	"ivta/cmd/fuzz"
 	"ivta/cmd/hybrid"
+	"ivta/cmd/validate"
+	"os"
 )
 
 func main() {
@@ -33,6 +34,18 @@ func main() {
 			hybrid.Help()
 		} else {
 			hybrid.Execute()
+		}
+	case "validate":
+		if len(os.Args) > 2 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			validate.Help()
+		} else {
+			validate.Execute()
+		}
+	case "mine":
+		if len(os.Args) > 2 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+			mine.Help()
+		} else {
+			mine.Execute()
 		}
 	case "-h", "--help":
 		printHelp()

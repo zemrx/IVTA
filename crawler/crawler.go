@@ -8,8 +8,7 @@ import (
 	"github.com/gocolly/colly/v2"
 )
 
-// RunCrawler crawls the target URL (using Colly) to extract links up to the given depth
-// and with the given concurrency. It returns a slice of discovered links.
+
 func RunCrawler(targetURL string, depth int, concurrency int) []string {
 	var (
 		discoveredLinks []string
@@ -17,7 +16,6 @@ func RunCrawler(targetURL string, depth int, concurrency int) []string {
 		mutex           = &sync.Mutex{}
 	)
 
-	// Create a new collector with allowed domains and asynchronous processing.
 	c := colly.NewCollector(
 		colly.AllowedDomains(extractDomain(targetURL)),
 		colly.MaxDepth(depth),
@@ -29,7 +27,6 @@ func RunCrawler(targetURL string, depth int, concurrency int) []string {
 		Parallelism: concurrency,
 	})
 
-	// OnHTML callback to extract and store links.
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		link := e.Request.AbsoluteURL(e.Attr("href"))
 		if link == "" {
@@ -41,7 +38,6 @@ func RunCrawler(targetURL string, depth int, concurrency int) []string {
 			discoveredLinks = append(discoveredLinks, link)
 		}
 		mutex.Unlock()
-		// Visit link in case it hasn’t been visited.
 		_ = e.Request.Visit(link)
 	})
 
@@ -57,7 +53,6 @@ func RunCrawler(targetURL string, depth int, concurrency int) []string {
 	return discoveredLinks
 }
 
-// extractDomain extracts the hostname from a URL string.
 func extractDomain(rawURL string) string {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {

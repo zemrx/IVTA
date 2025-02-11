@@ -18,17 +18,22 @@ type CrawlConfig struct {
 }
 
 type FuzzConfig struct {
-	TargetURL         string
-	TargetListFile    string
-	DirWordlistFile   string
-	ParamWordlistFile string
-	MaxDepth          int
-	Concurrency       int
-	Verbose           bool
-	OutputFile        string
-	CustomSymbol      string
+	TargetURL            string
+	TargetListFile       string
+	DirWordlistFile      string
+	ParamWordlistFile    string
+	MaxDepth             int
+	Concurrency          int
+	Verbose              bool
+	OutputFile           string
+	CustomSymbol         string
+	BlacklistStatusCodes string
+	BlacklistLengths     string
+	BlacklistWordCounts  string
+	BlacklistLineCounts  string
+	BlacklistSearchWords string
+	BlacklistRegex       string
 }
-
 type HybridConfig struct {
 	TargetURL         string
 	TargetListFile    string
@@ -69,7 +74,6 @@ func LoadCrawlConfig() CrawlConfig {
 	cfg := CrawlConfig{}
 
 	crawlFlagSet := flag.NewFlagSet("crawl", flag.ExitOnError)
-
 	crawlFlagSet.StringVar(&cfg.TargetURL, "u", "", "Target URL for crawling (required if -tl is not used)")
 	crawlFlagSet.StringVar(&cfg.TargetListFile, "tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
 	crawlFlagSet.IntVar(&cfg.MaxDepth, "d", 2, "Maximum depth for recursive discovery")
@@ -91,7 +95,6 @@ func LoadCrawlConfig() CrawlConfig {
 
 	return cfg
 }
-
 func LoadFuzzConfig() FuzzConfig {
 	cfg := FuzzConfig{}
 
@@ -106,6 +109,13 @@ func LoadFuzzConfig() FuzzConfig {
 	fuzzFlagSet.BoolVar(&cfg.Verbose, "v", false, "Enable verbose mode")
 	fuzzFlagSet.StringVar(&cfg.OutputFile, "o", "fuzz_results.json", "Path to the output file (JSON format)")
 	fuzzFlagSet.StringVar(&cfg.CustomSymbol, "s", "test", "Custom symbol to test for reflection")
+
+	fuzzFlagSet.StringVar(&cfg.BlacklistStatusCodes, "bs", "", "Comma-separated list of blacklisted status codes (e.g. 404,500)")
+	fuzzFlagSet.StringVar(&cfg.BlacklistLengths, "bl", "", "Comma-separated list of blacklisted body lengths (in bytes)")
+	fuzzFlagSet.StringVar(&cfg.BlacklistWordCounts, "bw", "", "Comma-separated list of blacklisted word counts")
+	fuzzFlagSet.StringVar(&cfg.BlacklistLineCounts, "blc", "", "Comma-separated list of blacklisted non-empty line counts")
+	fuzzFlagSet.StringVar(&cfg.BlacklistSearchWords, "bsw", "", "Comma-separated list of blacklisted search words")
+	fuzzFlagSet.StringVar(&cfg.BlacklistRegex, "br", "", "Comma-separated list of blacklisted regex patterns")
 
 	if err := fuzzFlagSet.Parse(os.Args[2:]); err != nil {
 		log.Fatal("Failed to parse flags:", err)
@@ -257,7 +267,6 @@ func SaveResults(outputFile string, sitemapURLs []string, htmlLinks []string, js
 	}
 }
 
-// removeDuplicates removes duplicate strings from a slice.
 func removeDuplicates(input []string) []string {
 	unique := make(map[string]bool)
 	var result []string

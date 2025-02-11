@@ -1,7 +1,6 @@
 package fuzz
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -12,82 +11,37 @@ import (
 )
 
 func Execute() {
-	targetURLFlag := flag.String("u", "", "Target URL to fuzz (required if -tl is not used)")
-	targetListFlag := flag.String("tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
-	dirWordlistFlag := flag.String("w", "wordlist.txt", "Path to the directory wordlist file (default: wordlist.txt)")
-	maxDepthFlag := flag.Int("d", 2, "Maximum recursion depth for fuzzing (default: 2)")
-	concurrencyFlag := flag.Int("c", 5, "Number of concurrent requests (default: 5)")
-	outputFileFlag := flag.String("o", "fuzz_results.json", "Path to the output file (default: fuzz_results.json)")
-	verboseFlag := flag.Bool("v", false, "Enable verbose mode")
+	cfg := config.LoadFuzzConfig() // This ensures flags are parsed correctly
 
-	blacklistStatusFlag := flag.String("bs", "", "Comma-separated list of blacklisted status codes (e.g. 404,500)")
-	blacklistLengthsFlag := flag.String("bl", "", "Comma-separated list of blacklisted body lengths (in bytes)")
-	blacklistWordCountsFlag := flag.String("bw", "", "Comma-separated list of blacklisted word counts")
-	blacklistLineCountsFlag := flag.String("blc", "", "Comma-separated list of blacklisted non-empty line counts")
-	blacklistSearchWordsFlag := flag.String("bsw", "", "Comma-separated list of blacklisted search words")
-	blacklistRegexFlag := flag.String("br", "", "Comma-separated list of blacklisted regex patterns")
-
-	helpFlag := flag.Bool("h", false, "Display this help message")
-	flag.Parse()
-
-	if *helpFlag {
-		Help()
-		os.Exit(0)
-	}
-
-	if *targetURLFlag == "" && *targetListFlag == "" {
+	if cfg.TargetURL == "" && cfg.TargetListFile == "" {
 		fmt.Println("Error: You must provide either a target URL (-u) or a target list file (-tl).")
 		Help()
 		os.Exit(1)
 	}
 
-	cfg := config.LoadFuzzConfig()
-
-	if *targetURLFlag != "" {
-		cfg.TargetURL = *targetURLFlag
-	}
-	if *targetListFlag != "" {
-		cfg.TargetListFile = *targetListFlag
-	}
-	cfg.DirWordlistFile = *dirWordlistFlag
-	cfg.MaxDepth = *maxDepthFlag
-	cfg.Concurrency = *concurrencyFlag
-	cfg.OutputFile = *outputFileFlag
-	cfg.Verbose = *verboseFlag
-
 	var bs []int
-	if *blacklistStatusFlag != "" {
-		bs = utils.ParseIntSlice(*blacklistStatusFlag)
+	if cfg.BlacklistStatusCodes != "" {
+		bs = utils.ParseIntSlice(cfg.BlacklistStatusCodes)
 	}
 	var bl []int
-	if *blacklistLengthsFlag != "" {
-		bl = utils.ParseIntSlice(*blacklistLengthsFlag)
+	if cfg.BlacklistLengths != "" {
+		bl = utils.ParseIntSlice(cfg.BlacklistLengths)
 	}
 	var bw []int
-	if *blacklistWordCountsFlag != "" {
-		bw = utils.ParseIntSlice(*blacklistWordCountsFlag)
+	if cfg.BlacklistWordCounts != "" {
+		bw = utils.ParseIntSlice(cfg.BlacklistWordCounts)
 	}
 	var blc []int
-	if *blacklistLineCountsFlag != "" {
-		blc = utils.ParseIntSlice(*blacklistLineCountsFlag)
+	if cfg.BlacklistLineCounts != "" {
+		blc = utils.ParseIntSlice(cfg.BlacklistLineCounts)
 	}
 	var bsw []string
-	if *blacklistSearchWordsFlag != "" {
-		parts := strings.Split(*blacklistSearchWordsFlag, ",")
-		for _, p := range parts {
-			if word := strings.TrimSpace(p); word != "" {
-				bsw = append(bsw, word)
-			}
-		}
+	if cfg.BlacklistSearchWords != "" {
+		bsw = strings.Split(cfg.BlacklistSearchWords, ",")
 	}
 	var br []string
-	if *blacklistRegexFlag != "" {
-		parts := strings.Split(*blacklistRegexFlag, ",")
-		for _, p := range parts {
-			if pat := strings.TrimSpace(p); pat != "" {
-				br = append(br, pat)
-			}
-		}
+	if cfg.BlacklistRegex != "" {
+		br = strings.Split(cfg.BlacklistRegex, ",")
 	}
 
 	options := fuzzer.FuzzOptions{

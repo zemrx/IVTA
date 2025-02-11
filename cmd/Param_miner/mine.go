@@ -1,7 +1,6 @@
 package mine
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -12,44 +11,7 @@ import (
 )
 
 func Execute() {
-	targetURLFlag := flag.String("u", "", "Target URL to mine (required if -tl is not used)")
-	targetListFlag := flag.String("tl", "", "Path to a file containing target URLs (required if -u is not used)")
-	wordlistFlag := flag.String("w", "wordlist.txt", "Path to the wordlist file (default: wordlist.txt)")
-	methodFlag := flag.String("m", "GET", "HTTP method (GET, POST, JSON, XML) (default: GET)")
-	headersFlag := flag.String("H", "", "Custom headers (e.g. 'Header1:Value1,Header2:Value2')")
-	dataFlag := flag.String("d", "", "Custom data (e.g. 'key1:value1,key2:value2')")
-	concurrencyFlag := flag.Int("c", 5, "Number of concurrent requests (default: 5)")
-	verboseFlag := flag.Bool("v", false, "Enable verbose mode")
-	outputFileFlag := flag.String("o", "miner_results.json", "Output file (default: miner_results.json)")
-	helpFlag := flag.Bool("h", false, "Display this help message")
-	flag.Parse()
-
-	if *helpFlag {
-		Help()
-		os.Exit(0)
-	}
-
-	if *targetURLFlag == "" && *targetListFlag == "" {
-		fmt.Println("Error: You must provide either a target URL (-u) or a target list file (-tl).")
-		Help()
-		os.Exit(1)
-	}
-
 	cfg := config.LoadMinerConfig()
-
-	if *targetURLFlag != "" {
-		cfg.TargetURL = *targetURLFlag
-	}
-	if *targetListFlag != "" {
-		cfg.TargetListFile = *targetListFlag
-	}
-	cfg.WordlistFile = *wordlistFlag
-	cfg.Method = *methodFlag
-	cfg.Headers = *headersFlag
-	cfg.Data = *dataFlag
-	cfg.Concurrency = *concurrencyFlag
-	cfg.Verbose = *verboseFlag
-	cfg.OutputFile = *outputFileFlag
 
 	var targets []string
 	if cfg.TargetListFile != "" {
@@ -78,7 +40,7 @@ func Execute() {
 			for _, pair := range headerPairs {
 				parts := strings.Split(pair, ":")
 				if len(parts) == 2 {
-					headers[parts[0]] = parts[1]
+					headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 				}
 			}
 		}
@@ -89,7 +51,7 @@ func Execute() {
 			for _, pair := range dataPairs {
 				parts := strings.Split(pair, ":")
 				if len(parts) == 2 {
-					data[parts[0]] = parts[1]
+					data[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 				}
 			}
 		}

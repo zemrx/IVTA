@@ -1,7 +1,6 @@
-package cmd
+package validate
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -11,39 +10,18 @@ import (
 )
 
 func Execute() {
-	targetURLFlag := flag.String("u", "", "Target URL to validate (required if -tl is not used)")
-	targetListFlag := flag.String("tl", "", "Path to a file containing a list of target URLs (required if -u is not used)")
-	outputFileFlag := flag.String("o", "validator_results.json", "Path to the output file (default: validator_results.json)")
-	verboseFlag := flag.Bool("v", false, "Enable verbose mode")
-	helpFlag := flag.Bool("h", false, "Display this help message")
-
-	flag.Parse()
-
-	if *helpFlag {
-		Help()
-		os.Exit(0)
-	}
-
-	if *targetURLFlag == "" && *targetListFlag == "" {
-		fmt.Println("Error: You must provide either a target URL (-u) or a target list file (-tl).")
-		Help()
-		os.Exit(1)
-	}
-
 	cfg := config.LoadValidatorConfig()
-	cfg.OutputFile = *outputFileFlag
-	cfg.Verbose = *verboseFlag
 
 	var targets []string
-	if *targetListFlag != "" {
+	if cfg.TargetListFile != "" {
 		var err error
-		targets, err = utils.ReadTargetList(*targetListFlag)
+		targets, err = utils.ReadTargetList(cfg.TargetListFile)
 		if err != nil {
 			fmt.Println("Error reading target list:", err)
 			os.Exit(1)
 		}
 	} else {
-		targets = []string{*targetURLFlag}
+		targets = []string{cfg.TargetURL}
 	}
 
 	var resultParams []string

@@ -1,7 +1,6 @@
 package hybrid
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -15,44 +14,7 @@ import (
 )
 
 func Execute() {
-	targetURLFlag := flag.String("u", "", "Target URL for hybrid discovery (required if -tl is not used)")
-	targetListFlag := flag.String("tl", "", "Path to a file containing target URLs (required if -u is not used)")
-	dirWordlistFlag := flag.String("w", "wordlist.txt", "Path to the directory wordlist file (default: wordlist.txt)")
-	paramWordlistFlag := flag.String("p", "param_wordlist.txt", "Path to the parameter wordlist file (default: param_wordlist.txt)")
-	maxDepthFlag := flag.Int("d", 2, "Maximum depth for recursive discovery (default: 2)")
-	concurrencyFlag := flag.Int("c", 5, "Number of concurrent requests (default: 5)")
-	verboseFlag := flag.Bool("v", false, "Enable verbose mode")
-	outputFileFlag := flag.String("o", "hybrid_results.json", "Path to the output file (default: hybrid_results.json)")
-	customSymbolFlag := flag.String("s", "test", "Custom symbol to test for reflection (default: test)")
-	helpFlag := flag.Bool("h", false, "Display this help message")
-	flag.Parse()
-
-	if *helpFlag {
-		Help()
-		os.Exit(0)
-	}
-
-	if *targetURLFlag == "" && *targetListFlag == "" {
-		fmt.Println("Error: You must provide either a target URL (-u) or a target list file (-tl).")
-		Help()
-		os.Exit(1)
-	}
-
 	cfg := config.LoadHybridConfig()
-
-	if *targetURLFlag != "" {
-		cfg.TargetURL = *targetURLFlag
-	}
-	if *targetListFlag != "" {
-		cfg.TargetListFile = *targetListFlag
-	}
-	cfg.DirWordlistFile = *dirWordlistFlag
-	cfg.ParamWordlistFile = *paramWordlistFlag
-	cfg.MaxDepth = *maxDepthFlag
-	cfg.Concurrency = *concurrencyFlag
-	cfg.OutputFile = *outputFileFlag
-	cfg.CustomSymbol = *customSymbolFlag
-	cfg.Verbose = *verboseFlag
 
 	var targets []string
 	if cfg.TargetListFile != "" {
@@ -110,7 +72,7 @@ func Execute() {
 			for _, pair := range strings.Split(cfg.Headers, ",") {
 				parts := strings.Split(pair, ":")
 				if len(parts) == 2 {
-					headers[parts[0]] = parts[1]
+					headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 				}
 			}
 		}
@@ -119,7 +81,7 @@ func Execute() {
 			for _, pair := range strings.Split(cfg.Data, ",") {
 				parts := strings.Split(pair, ":")
 				if len(parts) == 2 {
-					data[parts[0]] = parts[1]
+					data[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 				}
 			}
 		}
