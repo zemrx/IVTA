@@ -1,9 +1,11 @@
 package mine
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"ivta/config"
 	"ivta/miner"
@@ -62,7 +64,27 @@ func Execute() {
 			Data:    data,
 		}
 
-		results, err := miner.BruteForce(target, wordlist, options, cfg.Concurrency)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		baselineResp, err := miner.DoRequest(ctx, target, options)
+		if err != nil {
+			fmt.Printf("Error making baseline request: %v\n", err)
+			continue
+		}
+
+		extractedParams, wordsExist, err := miner.ExtractParamsFromBaseline(baselineResp, wordlist)
+		if err != nil {
+			fmt.Printf("Error extracting parameters: %v\n", err)
+		} else if wordsExist {
+			fmt.Println("Discovered parameters from baseline response:")
+			for _, param := range extractedParams {
+				fmt.Println(" -", param)
+			}
+			wordlist = utils.MergeUnique(extractedParams, wordlist)
+		}
+
+		results, err := miner.BruteForce(ctx, target, wordlist, options, cfg.Concurrency)
 		if err != nil {
 			fmt.Printf("Error during brute-force: %v\n", err)
 			continue
@@ -82,7 +104,7 @@ func Help() {
 	fmt.Println("Usage: ivta.exe miner -u <target_url> [options]")
 	fmt.Println("       ivta.exe miner -tl <target_list_file> [options]")
 	fmt.Println()
-	fmt.Println("Discover parameters using brute-force and response analysis.")
+	fmt.Println("Discover parameters using brute-force, response analysis, and baseline extraction.")
 	fmt.Println("Options:")
 	fmt.Println("  -u       Target URL (required if -tl is not used)")
 	fmt.Println("  -tl      Path to a file containing target URLs (required if -u is not used)")

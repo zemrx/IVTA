@@ -1,9 +1,11 @@
 package hybrid
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"ivta/config"
 	"ivta/crawler"
@@ -14,6 +16,10 @@ import (
 )
 
 func Execute() {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	cfg := config.LoadHybridConfig()
 
 	var targets []string
@@ -91,7 +97,7 @@ func Execute() {
 			Data:    data,
 		}
 
-		validParams, err := miner.BruteForce(target, paramWordlist, options, cfg.Concurrency)
+		validParams, err := miner.BruteForce(ctx, target, paramWordlist, options, cfg.Concurrency)
 		if err != nil {
 			fmt.Printf("Error during parameter fuzzing: %v\n", err)
 			continue

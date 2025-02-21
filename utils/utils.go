@@ -29,6 +29,19 @@ func CountLines(filename string) int64 {
 	return lineCount
 }
 
+func MergeUnique(a, b []string) []string {
+	combined := append(a, b...)
+	uniqueMap := make(map[string]bool, len(combined))
+	uniqueList := make([]string, 0, len(combined))
+
+	for _, item := range combined {
+		if !uniqueMap[item] {
+			uniqueMap[item] = true
+			uniqueList = append(uniqueList, item)
+		}
+	}
+	return uniqueList
+}
 func ReadTargetList(filename string) ([]string, error) {
 	file, err := os.Open(filename)
 	if err != nil {

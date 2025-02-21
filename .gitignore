@@ -5,6 +5,6 @@
 Makefile
 
 .gitignore
-
+*.json
 ivta.exe
 raft-small-directories-lowercase.txt

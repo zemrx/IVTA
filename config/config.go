@@ -56,6 +56,7 @@ type MinerConfig struct {
 	Method         string
 	Headers        string
 	Data           string
+	ctx            int
 	Concurrency    int
 	Verbose        bool
 	OutputFile     string
