@@ -1,7 +1,10 @@
 package fuzz
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -11,12 +14,41 @@ import (
 )
 
 func Execute() {
-	cfg := config.LoadFuzzConfig() // This ensures flags are parsed correctly
+	cfg := config.LoadFuzzConfig()
 
 	if cfg.TargetURL == "" && cfg.TargetListFile == "" {
 		fmt.Println("Error: You must provide either a target URL (-u) or a target list file (-tl).")
 		Help()
 		os.Exit(1)
+	}
+
+	if cfg.UseRaft {
+		raftFile := "raft.txt"
+		if _, err := os.Stat(raftFile); os.IsNotExist(err) {
+			fmt.Println("Raft wordlist not found. Downloading...")
+			url := "https://gitlab.com/Md_Shaman/SecLists/-/raw/eee1651de7906112719066540ca2c5bf688cf9f2/Discovery/Web-Content/raft-small-directories-lowercase.txt"
+			resp, err := http.Get(url)
+			if err != nil {
+				fmt.Printf("Error downloading Raft wordlist: %v\n", err)
+				os.Exit(1)
+			}
+			defer resp.Body.Close()
+
+			out, err := os.Create(raftFile)
+			if err != nil {
+				fmt.Printf("Error creating Raft wordlist file: %v\n", err)
+				os.Exit(1)
+			}
+			defer out.Close()
+
+			_, err = io.Copy(out, resp.Body)
+			if err != nil {
+				fmt.Printf("Error saving Raft wordlist: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Raft wordlist downloaded successfully.")
+		}
+		cfg.DirWordlistFile = raftFile
 	}
 
 	var bs []int
@@ -43,6 +75,10 @@ func Execute() {
 	if cfg.BlacklistRegex != "" {
 		br = strings.Split(cfg.BlacklistRegex, ",")
 	}
+	var extensions []string
+	if cfg.Extensions != "" {
+		extensions = strings.Split(cfg.Extensions, ",")
+	}
 
 	options := fuzzer.FuzzOptions{
 		Depth:                cfg.MaxDepth,
@@ -52,6 +88,9 @@ func Execute() {
 		BlacklistLineCounts:  blc,
 		BlacklistSearchWords: bsw,
 		BlacklistRegex:       br,
+		Extensions:           extensions,
+		UserAgent:            cfg.UserAgent,
+		Verbose:              cfg.Verbose,
 	}
 
 	var targets []string
@@ -68,7 +107,7 @@ func Execute() {
 
 	for _, target := range targets {
 		fmt.Println("Processing target:", target)
-		results := fuzzer.FuzzDirectories(target, cfg.DirWordlistFile, cfg.Concurrency, options)
+		results := fuzzer.FuzzDirectories(context.Background(), target, cfg.DirWordlistFile, cfg.Concurrency, options)
 		fmt.Printf("Found %d valid paths.\n", len(results))
 
 		var resultURLs []string
@@ -100,5 +139,8 @@ func Help() {
 	fmt.Println("  -blc     Comma-separated list of blacklisted non-empty line counts")
 	fmt.Println("  -bsw     Comma-separated list of blacklisted search words")
 	fmt.Println("  -br      Comma-separated list of blacklisted regex patterns")
+	fmt.Println("  -e       Comma-separated list of extensions to append to words (e.g. php,html)")
+	fmt.Println("  -ua      User-Agent string to use")
+	fmt.Println("  -raft    Use Raft wordlist if no wordlist is provided")
 	fmt.Println("  -h       Display this help message")
 }

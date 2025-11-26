@@ -3,6 +3,8 @@ package hybrid
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -16,11 +18,39 @@ import (
 )
 
 func Execute() {
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	cfg := config.LoadHybridConfig()
+
+	if cfg.UseRaft {
+		raftFile := "raft.txt"
+		if _, err := os.Stat(raftFile); os.IsNotExist(err) {
+			fmt.Println("Raft wordlist not found. Downloading...")
+			url := "https://gitlab.com/Md_Shaman/SecLists/-/raw/eee1651de7906112719066540ca2c5bf688cf9f2/Discovery/Web-Content/raft-small-directories-lowercase.txt"
+			resp, err := http.Get(url)
+			if err != nil {
+				fmt.Printf("Error downloading Raft wordlist: %v\n", err)
+				os.Exit(1)
+			}
+			defer resp.Body.Close()
+
+			out, err := os.Create(raftFile)
+			if err != nil {
+				fmt.Printf("Error creating Raft wordlist file: %v\n", err)
+				os.Exit(1)
+			}
+			defer out.Close()
+
+			_, err = io.Copy(out, resp.Body)
+			if err != nil {
+				fmt.Printf("Error saving Raft wordlist: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Raft wordlist downloaded successfully.")
+		}
+		cfg.DirWordlistFile = raftFile
+	}
 
 	var targets []string
 	if cfg.TargetListFile != "" {
@@ -34,12 +64,17 @@ func Execute() {
 		targets = []string{cfg.TargetURL}
 	}
 
+	var extensions []string
+	if cfg.Extensions != "" {
+		extensions = strings.Split(cfg.Extensions, ",")
+	}
+
 	for _, target := range targets {
 		fmt.Println("Processing target:", target)
 
 		sitemapURL := target + "/sitemap.xml"
 		sitemapURLs := parser.ParseSitemap(sitemapURL)
-		if sitemapURLs == nil || len(sitemapURLs) == 0 {
+		if len(sitemapURLs) == 0 {
 			fmt.Println("No sitemap found or failed to parse sitemap.")
 		} else {
 			fmt.Printf("Parsed %d URLs from sitemap.\n", len(sitemapURLs))
@@ -57,8 +92,11 @@ func Execute() {
 		fmt.Println("Starting fuzzing on discovered links...")
 		var validPaths []string
 		for _, link := range allLinks {
-			paths := fuzzer.FuzzDirectories(link, cfg.DirWordlistFile, cfg.Concurrency, fuzzer.FuzzOptions{
-				Depth: cfg.MaxDepth,
+			paths := fuzzer.FuzzDirectories(ctx, link, cfg.DirWordlistFile, cfg.Concurrency, fuzzer.FuzzOptions{
+				Depth:      cfg.MaxDepth,
+				Extensions: extensions,
+				UserAgent:  cfg.UserAgent,
+				Verbose:    cfg.Verbose,
 			})
 			for _, res := range paths {
 				validPaths = append(validPaths, res.URL)
@@ -127,5 +165,11 @@ func Help() {
 	fmt.Println("  -v       Enable verbose mode")
 	fmt.Println("  -o       Output file (default: hybrid_results.json)")
 	fmt.Println("  -s       Custom symbol to test for reflection (default: test)")
+	fmt.Println("  -H       Custom headers (e.g., 'Header1:Value1,Header2:Value2')")
+	fmt.Println("  -ddata   Custom data (e.g., 'key1:value1,key2:value2')")
+	fmt.Println("  -m       HTTP method (GET, POST, JSON, XML)")
+	fmt.Println("  -e       Comma-separated list of extensions to append to words (e.g. php,html)")
+	fmt.Println("  -ua      User-Agent string to use")
+	fmt.Println("  -raft    Use Raft wordlist if no wordlist is provided")
 	fmt.Println("  -h       Display this help message")
 }

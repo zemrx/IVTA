@@ -33,6 +33,9 @@ type FuzzConfig struct {
 	BlacklistLineCounts  string
 	BlacklistSearchWords string
 	BlacklistRegex       string
+	Extensions           string
+	UserAgent            string
+	UseRaft              bool
 }
 type HybridConfig struct {
 	TargetURL         string
@@ -47,6 +50,9 @@ type HybridConfig struct {
 	Headers           string
 	Data              string
 	Method            string
+	Extensions        string
+	UserAgent         string
+	UseRaft           bool
 }
 
 type MinerConfig struct {
@@ -117,6 +123,9 @@ func LoadFuzzConfig() FuzzConfig {
 	fuzzFlagSet.StringVar(&cfg.BlacklistLineCounts, "blc", "", "Comma-separated list of blacklisted non-empty line counts")
 	fuzzFlagSet.StringVar(&cfg.BlacklistSearchWords, "bsw", "", "Comma-separated list of blacklisted search words")
 	fuzzFlagSet.StringVar(&cfg.BlacklistRegex, "br", "", "Comma-separated list of blacklisted regex patterns")
+	fuzzFlagSet.StringVar(&cfg.Extensions, "e", "", "Comma-separated list of extensions to append to words (e.g. php,html)")
+	fuzzFlagSet.StringVar(&cfg.UserAgent, "ua", "", "User-Agent string to use")
+	fuzzFlagSet.BoolVar(&cfg.UseRaft, "raft", false, "Use Raft wordlist if no wordlist is provided")
 
 	if err := fuzzFlagSet.Parse(os.Args[2:]); err != nil {
 		log.Fatal("Failed to parse flags:", err)
@@ -149,6 +158,9 @@ func LoadHybridConfig() HybridConfig {
 	hybridFlagSet.StringVar(&cfg.Headers, "H", "", "Custom headers (e.g., 'Header1:Value1,Header2:Value2')")
 	hybridFlagSet.StringVar(&cfg.Data, "ddata", "", "Custom data (e.g., 'key1:value1,key2:value2')")
 	hybridFlagSet.StringVar(&cfg.Method, "m", "GET", "HTTP method (GET, POST, JSON, XML)")
+	hybridFlagSet.StringVar(&cfg.Extensions, "e", "", "Comma-separated list of extensions to append to words (e.g. php,html)")
+	hybridFlagSet.StringVar(&cfg.UserAgent, "ua", "", "User-Agent string to use")
+	hybridFlagSet.BoolVar(&cfg.UseRaft, "raft", false, "Use Raft wordlist if no wordlist is provided")
 
 	if err := hybridFlagSet.Parse(os.Args[2:]); err != nil {
 		log.Fatal("Failed to parse flags:", err)

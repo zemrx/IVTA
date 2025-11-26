@@ -2,11 +2,14 @@ package fuzzer
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -23,13 +26,17 @@ type FuzzResult struct {
 }
 
 type FuzzOptions struct {
-	Depth                int
-	BlacklistStatusCodes []int
-	BlacklistLengths     []int
-	BlacklistWordCounts  []int
-	BlacklistLineCounts  []int
-	BlacklistSearchWords []string
-	BlacklistRegex       []string
+	Depth                  int
+	Extensions             []string
+	UserAgent              string
+	BlacklistStatusCodes   []int
+	BlacklistLengths       []int
+	BlacklistWordCounts    []int
+	BlacklistLineCounts    []int
+	BlacklistSearchWords   []string
+	BlacklistRegex         []string
+	BlacklistRegexCompiled []*regexp.Regexp
+	Verbose                bool
 }
 
 func readWordlist(wordlistFile string) ([]string, error) {
@@ -53,11 +60,43 @@ func readWordlist(wordlistFile string) ([]string, error) {
 	return words, nil
 }
 
-func FuzzDirectories(targetURL string, wordlistFile string, concurrency int, options FuzzOptions) []FuzzResult {
+func FuzzDirectories(ctx context.Context, targetURL string, wordlistFile string, concurrency int, options FuzzOptions) []FuzzResult {
 	words, err := readWordlist(wordlistFile)
 	if err != nil {
 		log.Fatalf("Failed to read wordlist file: %v", err)
 	}
+
+	for i, pattern := range options.BlacklistRegex {
+		if pattern == "" {
+			continue
+		}
+		re, err := regexp.Compile(pattern)
+		if err == nil {
+			options.BlacklistRegexCompiled = append(options.BlacklistRegexCompiled, re)
+		} else {
+			log.Printf("Invalid blacklist regex %q: %v", pattern, err)
+		}
+		_ = i
+	}
+
+	var fuzzWords []string
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		word = strings.TrimLeft(word, "/")
+		if word == "" {
+			continue
+		}
+		fuzzWords = append(fuzzWords, word)
+		for _, ext := range options.Extensions {
+			if ext != "" {
+				if !strings.HasPrefix(ext, ".") {
+					ext = "." + ext
+				}
+				fuzzWords = append(fuzzWords, word+ext)
+			}
+		}
+	}
+	words = fuzzWords
 	totalWords := len(words)
 
 	var wg sync.WaitGroup
@@ -67,43 +106,92 @@ func FuzzDirectories(targetURL string, wordlistFile string, concurrency int, opt
 	var wordCounter int64
 
 	fmt.Printf("Starting directory fuzzing on: %s\n", targetURL)
-	fmt.Printf("Total words in wordlist: %d\n", totalWords)
+	fmt.Printf("Total words in wordlist (including extensions): %d\n", totalWords)
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 
 	var fuzz func(baseURL string, depth int)
 	fuzz = func(baseURL string, depth int) {
 		if depth > options.Depth {
 			return
 		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		for _, word := range words {
-			fullURL := fmt.Sprintf("%s/%s", baseURL, word)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			u, err := url.Parse(baseURL)
+			if err != nil {
+				if options.Verbose {
+					log.Printf("Error parsing base URL %s: %v", baseURL, err)
+				}
+				continue
+			}
+			segment := url.PathEscape(word)
+			u.Path = path.Join(strings.TrimRight(u.Path, "/"), segment)
+			fullURL := u.String()
+
 			wg.Add(1)
 			semaphore <- struct{}{}
 
-			go func(url string, currentDepth int) {
+			go func(urlStr string, currentDepth int) {
+				atomic.AddInt64(&wordCounter, 1)
 				defer wg.Done()
 				defer func() { <-semaphore }()
 
-				client := http.Client{
-					Timeout: 10 * time.Second,
+				select {
+				case <-ctx.Done():
+					return
+				default:
 				}
-				resp, err := client.Get(url)
+
+				req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 				if err != nil {
-					log.Printf("Error requesting %s: %v", url, err)
-					atomic.AddInt64(&wordCounter, 1)
+					if options.Verbose {
+						log.Printf("Error creating request for %s: %v", urlStr, err)
+					}
+					return
+				}
+
+				if options.UserAgent != "" {
+					req.Header.Set("User-Agent", options.UserAgent)
+				} else {
+					req.Header.Set("User-Agent", "IVTA-Fuzzer/1.0")
+				}
+
+				resp, err := client.Do(req)
+				if err != nil {
+					if ctx.Err() == nil && options.Verbose {
+						log.Printf("Error requesting %s: %v", urlStr, err)
+					}
 					return
 				}
 				defer resp.Body.Close()
 
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
-					log.Printf("Error reading response body for %s: %v", url, err)
-					atomic.AddInt64(&wordCounter, 1)
+					if options.Verbose {
+						log.Printf("Error reading response body for %s: %v", urlStr, err)
+					}
 					return
 				}
 				bodyStr := string(body)
 
 				if !passesBlacklistFilters(resp, bodyStr, options) {
-					atomic.AddInt64(&wordCounter, 1)
 					return
 				}
 
@@ -117,7 +205,7 @@ func FuzzDirectories(targetURL string, wordlistFile string, concurrency int, opt
 				}
 
 				result := FuzzResult{
-					URL:           url,
+					URL:           urlStr,
 					StatusCode:    resp.StatusCode,
 					ContentLength: len(bodyStr),
 					WordCount:     wordCount,
@@ -131,12 +219,26 @@ func FuzzDirectories(targetURL string, wordlistFile string, concurrency int, opt
 				results = append(results, result)
 				mutex.Unlock()
 
-				if currentDepth < options.Depth {
-					fuzz(url, currentDepth+1)
+				ct := resp.Header.Get("Content-Type")
+				isHTML := strings.Contains(strings.ToLower(ct), "text/html") || strings.Contains(strings.ToLower(ct), "application/xhtml+xml")
+
+				if currentDepth < options.Depth && (resp.StatusCode == 200 || resp.StatusCode == 301 || resp.StatusCode == 302 || resp.StatusCode == 403) && isHTML {
+					isFile := false
+					for _, ext := range options.Extensions {
+						if ext != "" && strings.HasSuffix(urlStr, ext) {
+							isFile = true
+							break
+						}
+					}
+					if !isFile && (strings.Contains(bodyStr, "Index of") || strings.Contains(bodyStr, "<html")) {
+						fuzz(urlStr, currentDepth+1)
+					}
 				}
 
-				atomic.AddInt64(&wordCounter, 1)
-				fmt.Printf("\rProgress: %d/%d words processed", atomic.LoadInt64(&wordCounter), totalWords)
+				current := atomic.LoadInt64(&wordCounter)
+				if current%10 == 0 {
+					fmt.Printf("\rProgress: %d words processed", current)
+				}
 			}(fullURL, depth)
 		}
 	}
@@ -182,15 +284,15 @@ func passesBlacklistFilters(resp *http.Response, body string, options FuzzOption
 		}
 	}
 
+	bodyLower := strings.ToLower(body)
 	for _, word := range options.BlacklistSearchWords {
-		if strings.Contains(body, word) {
+		if strings.Contains(bodyLower, strings.ToLower(word)) {
 			return false
 		}
 	}
 
-	for _, pattern := range options.BlacklistRegex {
-		re, err := regexp.Compile(pattern)
-		if err == nil && re.MatchString(body) {
+	for _, re := range options.BlacklistRegexCompiled {
+		if re.MatchString(body) {
 			return false
 		}
 	}

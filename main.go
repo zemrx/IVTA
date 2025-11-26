@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	mine "ivta/cmd/Param_miner"
 	"ivta/cmd/crawl"
 	"ivta/cmd/fuzz"
@@ -12,7 +13,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		printHelp()
+		printHelp(os.Stdout)
 		os.Exit(1)
 	}
 
@@ -48,20 +49,22 @@ func main() {
 			mine.Execute()
 		}
 	case "-h", "--help":
-		printHelp()
+		printHelp(os.Stdout)
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
-		printHelp()
+		printHelp(os.Stdout)
 		os.Exit(1)
 	}
 }
 
-func printHelp() {
-	fmt.Println("Usage: .\\ivta.exe <command> [options]")
-	fmt.Println("Commands:")
-	fmt.Println("  crawl    Run the crawler")
-	fmt.Println("  fuzz     Run the fuzzer")
-	fmt.Println("  hybrid   Run the hybrid crawler and fuzzer")
-	fmt.Println("Options:")
-	fmt.Println("  -h, --help   Display this help message")
+func printHelp(w io.Writer) {
+	fmt.Fprintln(w, "Usage: .\\ivta.exe <command> [options]")
+	fmt.Fprintln(w, "Commands:")
+	fmt.Fprintln(w, "  crawl    Run the crawler")
+	fmt.Fprintln(w, "  fuzz     Run the fuzzer")
+	fmt.Fprintln(w, "  hybrid   Run the hybrid crawler and fuzzer")
+	fmt.Fprintln(w, "  validate Run the validator")
+	fmt.Fprintln(w, "  mine     Run the parameter miner")
+	fmt.Fprintln(w, "Options:")
+	fmt.Fprintln(w, "  -h, --help   Display this help message")
 }
